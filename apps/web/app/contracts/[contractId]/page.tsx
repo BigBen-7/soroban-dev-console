@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useState, ChangeEvent } from "react";
-import { rpc as SorobanRpc, Address, xdr, StrKey } from "@stellar/stellar-sdk";
 import {
   ArrowLeft,
-  Box,
   Database,
   Clock,
   AlertCircle,
@@ -18,6 +16,7 @@ import { ContractEvents } from "@/components/contract-events";
 import { TokenDashboard } from "@/components/token-dashboard";
 import { ContractUpgradeModal } from "@/components/contract-upgrade-modal";
 import { useNetworkStore } from "@/store/useNetworkStore";
+import { fetchContractOverview, type ContractOverview } from "@/lib/contract-overview";
 
 // UI
 import { Button } from "@devconsole/ui";
@@ -38,13 +37,6 @@ import {
   parseWasmMetadata,
 } from "@devconsole/soroban-utils";
 
-interface ContractData {
-  exists: boolean;
-  wasmHash?: string;
-  lastModified?: number;
-  ledgerSeq?: number;
-}
-
 export default function ContractDetailPage() {
   const params = useParams();
   const contractId = params.contractId as string;
@@ -52,9 +44,8 @@ export default function ContractDetailPage() {
   const { setSpec } = useAbiStore();
   const { activeWorkspaceId, addContractToWorkspace } = useWorkspaceStore();
 
-  const [data, setData] = useState<ContractData | null>(null);
+  const [overview, setOverview] = useState<ContractOverview | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [isUploadingInterface, setIsUploadingInterface] = useState(false);
 
   const handleInterfaceUpload = async (
@@ -117,7 +108,7 @@ export default function ContractDetailPage() {
   };
 
   useEffect(() => {
-    async function fetchContract() {
+    async function load() {
       if (!contractId) return;
 
       try {
@@ -179,11 +170,11 @@ export default function ContractDetailPage() {
               Contract Details
               {loading ? (
                 <Skeleton className="h-6 w-20 shrink-0 rounded-full" />
-              ) : data?.exists ? (
+              ) : overview?.exists ? (
                 <Badge className="shrink-0 bg-green-600 hover:bg-green-700">
                   Active
                 </Badge>
-              ) : error ? (
+              ) : overview?.error ? (
                 <Badge variant="destructive" className="shrink-0">
                   Error
                 </Badge>
@@ -216,11 +207,11 @@ export default function ContractDetailPage() {
         </div>
       </div>
 
-      {error && (
+      {overview?.error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Contract</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{overview.error}</AlertDescription>
         </Alert>
       )}
 
@@ -253,24 +244,34 @@ export default function ContractDetailPage() {
                     <Skeleton className="h-4 w-full" />
                     <Skeleton className="h-4 w-3/4" />
                   </>
-                ) : data?.exists ? (
+                ) : overview?.exists ? (
                   <>
                     <div className="flex items-center gap-2 text-sm">
                       <CheckCircle2 className="h-4 w-4 text-green-600" />
                       <span className="text-muted-foreground">Status:</span>
                       <span className="font-medium">Active</span>
                     </div>
-                    {data.ledgerSeq && (
+                    {overview.lastModifiedLedger && (
                       <div className="flex items-center gap-2 text-sm">
                         <Clock className="h-4 w-4 text-blue-600" />
                         <span className="text-muted-foreground">
                           Last Modified:
                         </span>
                         <span className="font-mono text-xs">
-                          Ledger #{data.ledgerSeq}
+                          Ledger #{overview.lastModifiedLedger}
                         </span>
                       </div>
                     )}
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">Network:</span>
+                      <span className="font-medium">{overview.network}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">Interface:</span>
+                      <span className="font-medium">
+                        {overview.hasInterface ? "Available" : "Not found"}
+                      </span>
+                    </div>
                   </>
                 ) : (
                   <div className="text-sm text-muted-foreground">
