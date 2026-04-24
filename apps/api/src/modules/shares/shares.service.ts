@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ForbiddenException,
   GoneException,
+  BadRequestException,
 } from "@nestjs/common";
 import { SharesRepository } from "./shares.repository.js";
 import { WorkspacesRepository } from "../workspaces/workspaces.repository.js";
@@ -16,6 +17,7 @@ import {
 } from "../../lib/domain-events.js";
 import { AuditService } from "../../lib/audit.service.js";
 import { randomBytes } from "crypto";
+import { getCorrelationId } from "../../lib/request-context.js";
 
 import { IsString, IsOptional, IsObject, IsInt, Min, IsIn } from "class-validator";
 import { Type } from "class-transformer";
@@ -59,6 +61,11 @@ export class ListSharesDto {
   sortOrder?: "asc" | "desc";
 }
 
+// DEVOPS-002: Security constants for share validation
+const MAX_EXPIRY_YEARS = 1;
+const MAX_SNAPSHOT_SIZE_BYTES = 500_000; // 500KB limit
+const MAX_JSON_DEPTH = 10;
+
 /** BE-005: Pagination response envelope */
 export interface PaginatedResponse<T> {
   data: T[];
@@ -98,6 +105,35 @@ export class SharesService {
       throw new ForbiddenException("You do not own this workspace");
     }
 
+    // DEVOPS-002: Validate expiration date
+    if (dto.expiresAt) {
+      const expiryDate = new Date(dto.expiresAt);
+      const maxExpiry = new Date();
+      maxExpiry.setFullYear(maxExpiry.getFullYear() + MAX_EXPIRY_YEARS);
+      
+      if (expiryDate <= new Date()) {
+        throw new BadRequestException("Share expiration date must be in the future");
+      }
+      if (expiryDate > maxExpiry) {
+        throw new BadRequestException(
+          `Share expiration date cannot exceed ${MAX_EXPIRY_YEARS} year from now`,
+        );
+      }
+    }
+
+    // DEVOPS-002: Validate snapshot JSON size and depth
+    const snapshotString = JSON.stringify(dto.snapshotJson);
+    if (snapshotString.length > MAX_SNAPSHOT_SIZE_BYTES) {
+      throw new BadRequestException(
+        `Snapshot data exceeds maximum size of ${MAX_SNAPSHOT_SIZE_BYTES / 1000}KB`,
+      );
+    }
+    if (this.getJsonDepth(dto.snapshotJson) > MAX_JSON_DEPTH) {
+      throw new BadRequestException(
+        `Snapshot data exceeds maximum nesting depth of ${MAX_JSON_DEPTH}`,
+      );
+    }
+
     const token = randomBytes(24).toString("base64url");
 
     const share = await this.repository.create({
@@ -109,10 +145,13 @@ export class SharesService {
         expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
       },
     });
+    
+    const correlationId = getCorrelationId();
     this.events.emit(SHARE_CREATED, {
       shareId: share.id,
       workspaceId: dto.workspaceId,
       tokenHint: token.slice(0, 6) + "…",
+      correlationId,
     });
     void this.audit.log({
       actor: ownerKey,
@@ -120,7 +159,7 @@ export class SharesService {
       resourceType: "share",
       resourceId: share.id,
       summary: `Created share for workspace ${dto.workspaceId}`,
-      metadata: { workspaceId: dto.workspaceId, label: dto.label },
+      metadata: { workspaceId: dto.workspaceId, label: dto.label, correlationId },
     });
     return share;
   }
@@ -237,5 +276,29 @@ export class SharesService {
   async cleanup(): Promise<{ deleted: number }> {
     const deleted = await this.repository.deleteExpiredAndRevoked();
     return { deleted };
+  }
+
+  /**
+   * DEVOPS-002: Calculate JSON nesting depth to prevent JSON bombs.
+   * Returns the maximum depth of nested objects/arrays.
+   */
+  private getJsonDepth(value: unknown, currentDepth = 0): number {
+    if (value === null || typeof value !== "object") {
+      return currentDepth;
+    }
+
+    if (Array.isArray(value)) {
+      if (value.length === 0) return currentDepth;
+      return Math.max(
+        ...value.map((item) => this.getJsonDepth(item, currentDepth + 1)),
+      );
+    }
+
+    const values = Object.values(value as Record<string, unknown>);
+    if (values.length === 0) return currentDepth;
+    
+    return Math.max(
+      ...values.map((v) => this.getJsonDepth(v, currentDepth + 1)),
+    );
   }
 }
