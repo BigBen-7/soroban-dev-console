@@ -19,10 +19,22 @@ async function bootstrap() {
   app.enableCors({
     origin: webOrigin,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-owner-key", "x-request-id"],
+    // DEVOPS-002: Removed x-owner-key from allowedHeaders to avoid advertising
+    // sensitive authentication headers in CORS preflight responses.
+    // The header is still accepted and processed by the backend.
+    allowedHeaders: ["Content-Type", "Authorization", "x-request-id"],
     credentials: true
   });
   app.setGlobalPrefix("api");
+  
+  // DEVOPS-002: Add security headers to all responses
+  app.use((req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-XSS-Protection", "0"); // Modern browsers use CSP instead
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    next();
+  });
   app.useGlobalFilters(new ApiErrorFilter());
   // DEVOPS-001: Register correlation interceptor first to ensure all requests are traced
   app.useGlobalInterceptors(new CorrelationInterceptor(), new ApiResponseInterceptor());
