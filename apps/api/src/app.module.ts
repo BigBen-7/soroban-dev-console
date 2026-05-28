@@ -6,6 +6,7 @@ import { RuntimeConfigModule } from "./modules/runtime-config/runtime-config.mod
 import { FixtureManifestModule } from "./modules/fixture-manifest/fixture-manifest.module.js";
 import { SharesModule } from "./modules/shares/shares.module.js";
 import { WorkspacesModule } from "./modules/workspaces/workspaces.module.js";
+import { WaveModule } from "./modules/wave/wave.module.js";
 
 @Module({
   imports: [
@@ -18,7 +19,8 @@ import { WorkspacesModule } from "./modules/workspaces/workspaces.module.js";
     RuntimeConfigModule,
     FixtureManifestModule,
     SharesModule,
-    WorkspacesModule
+    WorkspacesModule,
+    WaveModule,
   ]
 })
 export class AppModule {}

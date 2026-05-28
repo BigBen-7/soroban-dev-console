@@ -201,3 +201,73 @@ export interface NormalizedSimulationPayload {
   cpuInsns?: number;
   memBytes?: number;
 }
+
+// ── Wave Program (BE-207, BE-208, BE-211, BE-213) ─────────────────────────────
+
+export type WaveAction = "claim" | "appeal" | "reward";
+
+export type AppealStatus = "open" | "under_review" | "resolved" | "rejected";
+
+export interface AppealCaseSummary {
+  id: string;
+  issueRef: string;
+  status: AppealStatus;
+  reason: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  resolvedAt: Date | string | null;
+  resolution: string | null;
+}
+
+export interface CreateAppealPayload {
+  issueRef: string;
+  reason: string;
+  evidenceJson?: unknown;
+}
+
+export interface TransitionAppealPayload {
+  status: AppealStatus;
+  resolution?: string;
+}
+
+export type RiskSeverity = "low" | "medium" | "high" | "critical";
+
+export type ModerationReasonCode =
+  | "CLEAN"
+  | "VELOCITY_ANOMALY"
+  | "DUPLICATE_SUBMISSION"
+  | "PATTERN_MATCH"
+  | "MANUAL_FLAG";
+
+export interface RiskScorePayload {
+  issueRef: string;
+  recentSubmissionCount?: number;
+  duplicateDetected?: boolean;
+  patternMatched?: boolean;
+  manualFlag?: boolean;
+}
+
+export interface RiskScoreResponse {
+  severity: RiskSeverity;
+  reasonCode: ModerationReasonCode;
+}
+
+export interface ReviewWindowPolicy {
+  maintainerReviewWindowHours: number;
+  appealDeadlineHours: number;
+  appealMaxOpenHours: number;
+}
+
+export interface ReviewSchedule {
+  submittedAt: string;
+  maintainerReviewDeadline: string;
+  automatedEvalEligibleAt: string;
+  appealDeadline: string;
+  policy: ReviewWindowPolicy;
+}
+
+export interface AppealTimingResult {
+  withinWindow: boolean;
+  reason?: string;
+  appealDeadline: string;
+}

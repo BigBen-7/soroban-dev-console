@@ -93,6 +93,26 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+/// BE-208: Appeal case submitted by a contributor disputing a decision.
+model AppealCase {
+  id            String    @id @default(cuid())
+  ownerKey      String    @map("owner_key")
+  issueRef      String    @map("issue_ref")
+  /// State machine: open → under_review → resolved | rejected
+  status        String    @default("open")
+  reason        String
+  evidenceJson  Json?     @map("evidence_json")
+  resolvedAt    DateTime? @map("resolved_at")
+  resolution    String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([ownerKey])
+  @@index([issueRef])
+  @@index([status])
+  @@map("appeal_cases")
+}
+
 /// Immutable, read-only links that capture a point-in-time workspace snapshot.
 model ShareLink {
   id            String     @id @default(cuid())
