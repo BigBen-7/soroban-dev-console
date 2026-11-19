@@ -1,7 +1,7 @@
 import { Controller, Get, Param } from "@nestjs/common";
 import { NetworkHealthService } from "./network-health.service.js";
 import { RpcMetricsService } from "../rpc/rpc-metrics.service.js";
-import { rpcCircuitBreakers } from "../../lib/circuit-breaker.js";
+import { rpcCircuitBreakers, sanitizeCircuitSnapshots } from "../../lib/circuit-breaker.js";
 import { rpcCoalescer } from "../../lib/request-coalescer.js";
 import { DbPoolMetricsService } from "./db-pool-metrics.service.js";
 
